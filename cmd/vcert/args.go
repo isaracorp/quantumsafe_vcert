@@ -21,12 +21,13 @@ import (
 )
 
 const (
-	commandGenCSRName  = "gencsr"
-	commandEnrollName  = "enroll"
-	commandPickupName  = "pickup"
-	commandRevokeName  = "revoke"
-	commandRenewName   = "renew"
-	commandGetcredName = "getcred"
+	commandGenCSRName      = "gencsr"
+	commandExtendCSRQSName = "extendcsrqs"
+	commandEnrollName      = "enroll"
+	commandPickupName      = "pickup"
+	commandRevokeName      = "revoke"
+	commandRenewName       = "renew"
+	commandGetcredName     = "getcred"
 )
 
 var (
@@ -48,6 +49,8 @@ type commandFlags struct {
 	country           string
 	csrFile           string
 	csrOption         string
+	csrInFile         string
+	csrQSFile         string
 	customFields      []string
 	distinguishedName string
 	dnsSans           stringSlice
@@ -61,10 +64,14 @@ type commandFlags struct {
 	keyCurve          certificate.EllipticCurve
 	keyCurveString    string
 	keyFile           string
+	keyInFile         string
+	keyQSFile         string
 	keyPassword       string
 	keySize           int
 	keyType           *certificate.KeyType
 	keyTypeString     string
+	keyParam          certificate.DilithiumParam
+	keyParamString    string
 	locality          string
 	noPickup          bool
 	noPrompt          bool

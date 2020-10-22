@@ -1,17 +1,15 @@
 package main
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/Venafi/vcert"
-	"github.com/Venafi/vcert/pkg/certificate"
-	"github.com/Venafi/vcert/pkg/endpoint"
-	"github.com/Venafi/vcert/pkg/venafi/tpp"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/pkcs12"
 	"io/ioutil"
 	"log"
 	"net"
@@ -19,6 +17,14 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Venafi/vcert"
+	"github.com/Venafi/vcert/pkg/certificate"
+	"github.com/Venafi/vcert/pkg/endpoint"
+	"github.com/Venafi/vcert/pkg/venafi/tpp"
+	"github.com/isaracorp/golang-iqrcrypto"
+	"github.com/urfave/cli/v2"
+	"golang.org/x/crypto/pkcs12"
 )
 
 var (
@@ -59,6 +65,16 @@ var (
 		Usage:  "To generate a certificate signing request (CSR)",
 		UsageText: ` vcert gencsr -cn <common name> -o <organization> -ou <organizational unit> -c <country> -st <state> -l <locality> -key-file <key output file> -csr-file <csr output file>
 		vcert gencsr -cn <common name> -o <organization> -ou <organizational unit> -ou <organizational unit2> -c <country> -st <state> -l <locality> -key-file <key output file> -csr-file <csr output file>
+`,
+	}
+	commandExtendCSRQS = &cli.Command{
+		Before: runBeforeCommand,
+		Name:   commandExtendCSRQSName,
+		Flags:  exendCsrQSFlags,
+		Action: doCommandExtendCSRQS1,
+		Usage:  "To extend a certificate signing request (CSR) with Quantum-Safe key",
+		UsageText: ` vcert extendcsrqs -csr-in-file <csr input file> -key-in-file <classic key input file> -csr-qs-file <csr qs output file> -key-qs-file <qs key output file>
+		vcert extendcsrqs -csr-in-file <csr input file> -key-in-file <classic key input file> -csr-qs-file <csr qs output file> -key-qs-file <qs key output file> -key-param iqr_dilithium_160
 `,
 	}
 	commandPickup = &cli.Command{
@@ -166,6 +182,7 @@ func setTLSConfig() error {
 		// Setup HTTPS client
 		tlsConfig.Certificates = []tls.Certificate{cert}
 		tlsConfig.RootCAs = caCertPool
+		// nolint:staticcheck
 		tlsConfig.BuildNameToCertificate()
 	}
 
@@ -391,6 +408,29 @@ func doCommandGenCSR1(c *cli.Context) error {
 		return err
 	}
 	err = writeOutKeyAndCsr(&flags, key, csr)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func doCommandExtendCSRQS1(c *cli.Context) error {
+	err := validateExtendCSRFlags1(c.Command.Name)
+	if err != nil {
+		return err
+	}
+	key, csr, err := extendCsrQSForCommandExtendCsrQS(&flags, []byte(flags.keyPassword))
+	if err != nil {
+		return err
+	}
+	defer key.Destroy() // nolint: errcheck
+
+	derKey, err := iqrcrypto.IqrDilithiumExportPrivateKeyPKCS8(key.(*iqrcrypto.DilithiumPrivateKey))
+	if err != nil {
+		return err
+	}
+	err = writeOutQSKeyAndCsr(&flags, derKey, csr)
 	if err != nil {
 		return err
 	}
@@ -687,6 +727,9 @@ func generateCsrForCommandGenCsr(cf *commandFlags, privateKeyPass []byte) (priva
 	if cf.keyCurve != certificate.EllipticCurveNotSet {
 		certReq.KeyCurve = cf.keyCurve
 	}
+	if cf.keyParam != certificate.DilithiumParamNotSet {
+		certReq.KeyParameter = cf.keyParam
+	}
 	err = certReq.GeneratePrivateKey()
 	if err != nil {
 		return
@@ -753,4 +796,108 @@ func writeOutKeyAndCsr(cf *commandFlags, key []byte, csr []byte) (err error) {
 	}
 	_, err = csrWriter.Write(csr)
 	return
+}
+
+func parsePrivateKey(keyIn *pem.Block, password string) (crypto.PrivateKey, error) {
+	var der []byte
+	var err error
+	if len(password) > 0 {
+		der, err = x509.DecryptPEMBlock(keyIn, []byte(password))
+		if err != nil {
+			return nil, fmt.Errorf("Fail to decrypt private key")
+		}
+	} else {
+		der = keyIn.Bytes
+	}
+
+	rsaKey, err := x509.ParsePKCS1PrivateKey(der)
+	if err == nil {
+		return rsaKey, nil
+	}
+
+	key, err := x509.ParsePKCS8PrivateKey(der)
+	if err == nil {
+		switch key := key.(type) {
+		case *rsa.PrivateKey, *ecdsa.PrivateKey:
+			return key, nil
+		default:
+			return nil, fmt.Errorf("Unknown private key type")
+		}
+	}
+
+	ecdsaKey, err := x509.ParseECPrivateKey(der)
+	if err == nil {
+		return ecdsaKey, nil
+	}
+	return nil, fmt.Errorf("Failed to parse private key")
+}
+
+func writeOutQSKeyAndCsr(cf *commandFlags, key []byte, csr []byte) (err error) {
+	keyWriter := getFileWriter(cf.keyQSFile)
+	keyFile, ok := keyWriter.(*os.File)
+	if ok {
+		defer keyFile.Close()
+	}
+
+	if len(cf.keyPassword) > 0 {
+		keyPEMBlock, err := x509.EncryptPEMBlock(rand.Reader, "ALT PRIVATE KEY", key, []byte(cf.keyPassword), x509.PEMCipherAES256)
+		keyPEM := pem.EncodeToMemory(keyPEMBlock)
+		if err != nil {
+			return fmt.Errorf("Failed to encrypt Quantum-Safe private key")
+		}
+		_, err = keyWriter.Write(keyPEM)
+		if err != nil {
+			return err
+		}
+	} else {
+		keyPEM := pem.EncodeToMemory(&pem.Block{
+			Type: "ALT PRIVATE KEY", Bytes: key,
+		})
+		_, err = keyWriter.Write(keyPEM)
+		if err != nil {
+			return err
+		}
+	}
+
+	csrWriter := getFileWriter(cf.csrQSFile)
+	csrFile, ok := csrWriter.(*os.File)
+	if ok {
+		defer csrFile.Close()
+	}
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type: "CERTIFICATE REQUEST", Bytes: csr,
+	})
+	_, err = csrWriter.Write(csrPEM)
+	return
+}
+
+func extendCsrQSForCommandExtendCsrQS(cf *commandFlags, privateKeyPass []byte) (privateKey iqrcrypto.QSPrivateKey, csr []byte, err error) {
+
+	keyInPEM, err := ioutil.ReadFile(flags.keyInFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyIn, _ := pem.Decode([]byte(keyInPEM))
+
+	classicPriv, err := parsePrivateKey(keyIn, cf.keyPassword)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dilithiumPriv, err := certificate.GenerateDilithiumPrivateKey(cf.keyParam)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	csrInPEM, err := ioutil.ReadFile(flags.csrInFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	csrIn, _ := pem.Decode([]byte(csrInPEM))
+	csrQs, err := iqrcrypto.ExtendCertificateReqAlt(csrIn.Bytes, classicPriv, dilithiumPriv)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return dilithiumPriv, csrQs, err
 }

@@ -19,10 +19,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/howeyc/gopass"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/howeyc/gopass"
 )
 
 func readPasswordsFromInputFlags(commandName string, cf *commandFlags) error {
@@ -57,7 +58,7 @@ func readPasswordsFromInputFlags(commandName string, cf *commandFlags) error {
 		}
 	}
 
-	if commandName == commandEnrollName || commandName == commandGenCSRName || commandName == commandRenewName || commandName == commandPickupName && cf.format == "pkcs12" {
+	if commandName == commandEnrollName || commandName == commandGenCSRName || commandName == commandExtendCSRQSName || commandName == commandRenewName || commandName == commandPickupName && cf.format == "pkcs12" {
 		var keyPasswordNotNeeded = false
 
 		keyPasswordNotNeeded = keyPasswordNotNeeded || (cf.csrOption == "service" && cf.noPickup)
@@ -66,6 +67,9 @@ func readPasswordsFromInputFlags(commandName string, cf *commandFlags) error {
 
 		if !keyPasswordNotNeeded {
 			if cf.keyPassword == "" && !cf.noPrompt {
+				if commandName == commandExtendCSRQSName {
+					fmt.Printf("The pass phrase of Quantum-Safe key must be the same as the classic one.\n")
+				}
 				fmt.Printf("Enter key pass phrase:")
 				input, err := gopass.GetPasswdMasked()
 				if err != nil {

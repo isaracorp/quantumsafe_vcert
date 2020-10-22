@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/urfave/cli/v2"
 	"sort"
 	"strings"
+
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -91,7 +92,7 @@ var (
 
 	flagKeyType = &cli.StringFlag{
 		Name:        "key-type",
-		Usage:       "Use to specify a key type. Options include: rsa | ecdsa (Default: rsa)",
+		Usage:       "Use to specify a key type. Options include: rsa | ecdsa | dilithium (Default: rsa)",
 		Destination: &flags.keyTypeString,
 	}
 
@@ -100,6 +101,13 @@ var (
 		Usage:       "Use to specify a key size (default 2048).",
 		Destination: &flags.keySize,
 		DefaultText: "2048",
+	}
+
+	flagKeyParam = &cli.StringFlag{
+		Name:        "key-param",
+		Usage:       "Use to specify a key parameter for Dilithium algorithm (default iqr_dilithium_128). Options include: iqr_dilithium_128 | iqr_dilithium_160 (Default: iqr_dilithium_128)",
+		Destination: &flags.keyParamString,
+		DefaultText: "iqr_dilithium_128",
 	}
 
 	flagFriendlyName = &cli.StringFlag{
@@ -186,6 +194,22 @@ var (
 		TakesFile:   true,
 	}
 
+	flagKeyInFile = &cli.StringFlag{
+		Name: "key-in-file",
+		Usage: "Use to specify a file name of the classic private key. " +
+			"Example: --key-in-file /path-to/classickey.pem",
+		Destination: &flags.keyInFile,
+		TakesFile:   true,
+	}
+
+	flagKeyQSFile = &cli.StringFlag{
+		Name: "key-qs-file",
+		Usage: "Use to specify a file name and a location where the resulting Quantum-Safe private key file should be written. " +
+			"Example: --key-qs-file /path-to/newkey.pem",
+		Destination: &flags.keyQSFile,
+		TakesFile:   true,
+	}
+
 	flagCertFile = &cli.StringFlag{
 		Name: "cert-file",
 		Usage: "Use to specify a file name and a location where the resulting " +
@@ -258,6 +282,22 @@ var (
 		Usage: "Use to specify a file name and a location where the resulting CSR file should be written. " +
 			"Example: --csr-file /tmp/newcsr.pem",
 		Destination: &flags.csrFile,
+		TakesFile:   true,
+	}
+
+	flagCSRInFile = &cli.StringFlag{
+		Name: "csr-in-file",
+		Usage: "Use to specify a file name and a location of the classic CSR file that should be extended with Quantum-Safe key. " +
+			"Example: --csr-in-file /tmp/newcsr.pem",
+		Destination: &flags.csrInFile,
+		TakesFile:   true,
+	}
+
+	flagCSRQSFile = &cli.StringFlag{
+		Name: "csr-qs-file",
+		Usage: "Use to specify a file name and a location where the resulting Quantum-Safe CSR file should be written. " +
+			"Example: --csr-in-file /tmp/newcsr.pem",
+		Destination: &flags.csrQSFile,
 		TakesFile:   true,
 	}
 
@@ -424,7 +464,7 @@ var (
 	}
 
 	commonFlags              = []cli.Flag{flagInsecure, flagFormat, flagVerbose, flagNoPrompt}
-	keyFlags                 = []cli.Flag{flagKeyType, flagKeySize, flagKeyCurve, flagKeyFile, flagKeyPassword}
+	keyFlags                 = []cli.Flag{flagKeyType, flagKeySize, flagKeyCurve, flagKeyFile, flagKeyPassword, flagKeyParam}
 	sansFlags                = []cli.Flag{flagDNSSans, flagEmailSans, flagIPSans}
 	subjectFlags             = flagsApppend(flagCommonName, flagCountry, flagState, flagLocality, flagOrg, flagOrgUnits)
 	sortableCredentialsFlags = []cli.Flag{
@@ -457,6 +497,16 @@ var (
 		flagNoPrompt,
 		flagVerbose,
 	))
+
+	exendCsrQSFlags = flagsApppend(
+		flagKeyInFile,
+		flagKeyQSFile,
+		flagCSRInFile,
+		flagCSRQSFile,
+		keyFlags,
+		flagNoPrompt,
+		flagVerbose,
+	)
 
 	enrollFlags = flagsApppend(
 		flagCommonName,

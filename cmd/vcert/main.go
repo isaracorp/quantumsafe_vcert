@@ -18,12 +18,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/Venafi/vcert"
-	"github.com/urfave/cli/v2"
 	"log"
 	"os"
 	"sort"
 	"time"
+
+	"github.com/Venafi/vcert"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -63,6 +64,7 @@ func main() {
 		Commands: []*cli.Command{
 			commandGetcred,
 			commandGenCSR,
+			commandExtendCSRQS,
 			commandEnroll,
 			commandPickup,
 			commandRenew,
@@ -93,6 +95,7 @@ ACTIONS:
    pickup   To retrieve a certificate
    renew    To renew a certificate
    revoke   To revoke a certificate
+   extendcsrqs To extend a ertificate signing request into a quantum-safe Catalyst certificate signing request
 
 OPTIONS:
    {{range .VisibleFlags}}{{.}}

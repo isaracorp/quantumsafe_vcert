@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/Venafi/vcert/pkg/certificate"
 	"io/ioutil"
 	"regexp"
 	"strings"
+
+	"github.com/Venafi/vcert/pkg/certificate"
 )
 
 // RevocationReasonOptions is an array of strings containing reasons for certificate revocation
@@ -70,6 +71,9 @@ func validateCommonFlags(commandName string) error {
 	case "ecdsa":
 		kt := certificate.KeyTypeECDSA
 		flags.keyType = &kt
+	case "dilithium":
+		kt := certificate.KeyTypeDilithium
+		flags.keyType = &kt
 	case "":
 	default:
 		return fmt.Errorf("unknown key type: %s", flags.keyTypeString)
@@ -85,6 +89,17 @@ func validateCommonFlags(commandName string) error {
 	case "":
 	default:
 		return fmt.Errorf("unknown EC key curve: %s", flags.keyTypeString)
+
+	}
+
+	switch strings.ToLower(flags.keyParamString) {
+	case "iqr_dilithium_128":
+		flags.keyParam = certificate.Dilithium128
+	case "iqr_dilithium_160":
+		flags.keyParam = certificate.Dilithium160
+	case "":
+	default:
+		return fmt.Errorf("unknown Dilithium key parameter: %s", flags.keyParamString)
 
 	}
 	return nil
@@ -316,6 +331,31 @@ func validateGenerateFlags1(commandName string) error {
 
 	if flags.commonName == "" && len(flags.dnsSans) == 0 {
 		return fmt.Errorf("A Common Name (cn) or Subject Alternative Name: DNS (san-dns) value is required")
+	}
+
+	return nil
+}
+
+func validateExtendCSRFlags1(commandName string) error {
+	err := validateCommonFlags(commandName)
+	if err != nil {
+		return err
+	}
+	err = readData(commandName)
+	if err != nil {
+		return err
+	}
+
+	if flags.keyQSFile == "" {
+		return fmt.Errorf("A Quantum-Safe key output file is required")
+	}
+
+	if flags.csrInFile == "" {
+		return fmt.Errorf("A classic CRS file is required")
+	}
+
+	if flags.csrQSFile == "" {
+		return fmt.Errorf("A Quantum-Safe CRS output file is required")
 	}
 
 	return nil

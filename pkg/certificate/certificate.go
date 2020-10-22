@@ -26,15 +26,20 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"github.com/Venafi/vcert/pkg/verror"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Venafi/vcert/pkg/verror"
+	"github.com/isaracorp/golang-iqrcrypto"
 )
 
 // EllipticCurve represents the types of supported elliptic curves
 type EllipticCurve int
+
+// DilithiumParam represents the parameter of Dilithium algorithm
+type DilithiumParam int
 
 func (ec *EllipticCurve) String() string {
 	switch *ec {
@@ -76,6 +81,13 @@ const (
 	EllipticCurveDefault = EllipticCurveP256
 
 	defaultRSAlength int = 2048
+
+	DilithiumParamNotSet DilithiumParam = iota
+	// Dilithium128 represents iqr_dilithium_128
+	Dilithium128
+	// Dilithium160 represents iqr_dilithium_160
+	Dilithium160
+	DilithiumParamDefault = Dilithium128
 )
 
 func AllSupportedCurves() []EllipticCurve {
@@ -94,6 +106,8 @@ func (kt *KeyType) String() string {
 		return "RSA"
 	case KeyTypeECDSA:
 		return "ECDSA"
+	case KeyTypeDilithium:
+		return "Dilithium"
 	default:
 		return ""
 	}
@@ -105,6 +119,9 @@ func (kt *KeyType) X509Type() x509.PublicKeyAlgorithm {
 		return x509.RSA
 	case KeyTypeECDSA:
 		return x509.ECDSA
+	case KeyTypeDilithium:
+		//TODO: is there a better way to define the x509 type?
+		return x509.Ed25519 + 100
 	}
 	return x509.UnknownPublicKeyAlgorithm
 }
@@ -118,6 +135,9 @@ func (kt *KeyType) Set(value string) error {
 	case "ecdsa", "ec", "ecc":
 		*kt = KeyTypeECDSA
 		return nil
+	case "dilithium":
+		*kt = KeyTypeDilithium
+		return nil
 	}
 	return fmt.Errorf("%w: unknown key type: %s", verror.VcertError, value) //todo: check all calls
 }
@@ -127,6 +147,8 @@ const (
 	KeyTypeRSA KeyType = iota
 	// KeyTypeECDSA represents a key type of ECDSA
 	KeyTypeECDSA
+	// KeyTypeDilithium represents a key type of Dilithium
+	KeyTypeDilithium
 )
 
 type CSrOriginOption int
@@ -181,6 +203,7 @@ type Request struct {
 	KeyType            KeyType
 	KeyLength          int
 	KeyCurve           EllipticCurve
+	KeyParameter       DilithiumParam
 	csr                []byte // should be a PEM-encoded CSR
 	PrivateKey         crypto.Signer
 	CsrOrigin          CSrOriginOption
@@ -292,7 +315,13 @@ func (request *Request) GenerateCSR() error {
 	}
 	certificateRequest.Attributes = request.Attributes
 
-	csr, err := x509.CreateCertificateRequest(rand.Reader, &certificateRequest, request.PrivateKey)
+	var csr []byte
+	var err error
+	if _, ok := request.PrivateKey.(iqrcrypto.QSPrivateKey); ok {
+		csr, err = iqrcrypto.CreateQSCertificateRequest(rand.Reader, &certificateRequest, request.PrivateKey)
+	} else {
+		csr, err = x509.CreateCertificateRequest(rand.Reader, &certificateRequest, request.PrivateKey)
+	}
 	if err != nil {
 		csr = nil
 	}
@@ -318,6 +347,8 @@ func (request *Request) GeneratePrivateKey() error {
 			return fmt.Errorf("key Size must be %d or greater. But it is %d", AllSupportedKeySizes()[0], request.KeyLength)
 		}
 		request.PrivateKey, err = GenerateRSAPrivateKey(request.KeyLength)
+	case KeyTypeDilithium:
+		request.PrivateKey, err = GenerateDilithiumPrivateKey(request.KeyParameter)
 	default:
 		return fmt.Errorf("%w: unable to generate certificate request, key type %s is not supported", verror.VcertError, request.KeyType.String())
 	}
@@ -416,6 +447,13 @@ func GetPrivateKeyPEMBock(key crypto.Signer) (*pem.Block, error) {
 			return nil, err
 		}
 		return &pem.Block{Type: "EC PRIVATE KEY", Bytes: b}, nil
+	case *iqrcrypto.DilithiumPrivateKey:
+		altKey := key.(*iqrcrypto.DilithiumPrivateKey)
+		keyBuf, err := iqrcrypto.IqrDilithiumExportPrivateKeyPKCS8(altKey)
+		if err != nil {
+			return nil, err
+		}
+		return &pem.Block{Type: "ALT PRIVATE KEY", Bytes: keyBuf}, nil
 	default:
 		return nil, fmt.Errorf("%w: unable to format Key", verror.VcertError)
 	}
@@ -480,6 +518,22 @@ func GenerateRSAPrivateKey(size int) (*rsa.PrivateKey, error) {
 	}
 
 	return priv, nil
+}
+
+// GenerateDilithiumPrivateKey generates a new dilithium private key using the vaiant specified
+// Call iqrcrypto.IqrDilithiumDestroyPrivateKey if the returned private key no longer used.
+// variant: one of iqrcrypto.IqrDILITHIUM128 and iqrcrypto.IqrDILITHIUM160
+func GenerateDilithiumPrivateKey(param DilithiumParam) (*iqrcrypto.DilithiumPrivateKey, error) {
+	var variant *iqrcrypto.IqrDilithiumVariant
+	switch param {
+	case Dilithium128:
+		variant = iqrcrypto.IqrDILITHIUM128
+	case Dilithium160:
+		variant = iqrcrypto.IqrDILITHIUM160
+	default:
+		variant = iqrcrypto.IqrDILITHIUM128
+	}
+	return iqrcrypto.GenerateDilithiumPrivateKey(variant, rand.Reader)
 }
 
 // NewRequest duplicates new Request object based on issued certificate

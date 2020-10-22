@@ -45,6 +45,7 @@ func buildConfig(c *cli.Context, flags *commandFlags) (cfg vcert.Config, err err
 			connectorType = endpoint.ConnectorTypeFake
 			if flags.testModeDelay > 0 {
 				logf("Running in -test-mode with emulating endpoint delay.")
+				/* #nosec */
 				var delay = rand.Intn(flags.testModeDelay)
 				for i := 0; i < delay; i++ {
 					time.Sleep(1 * time.Second)

@@ -22,12 +22,15 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"log"
 	"math/big"
 	"net"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/isaracorp/golang-iqrcrypto"
 )
 
 func getCertificateRequestForTest() *Request {
@@ -390,6 +393,81 @@ func TestPublicKey(t *testing.T) {
 	pub := PublicKey(priv)
 	if pub == nil {
 		t.Fatal("should return public key")
+	}
+}
+
+func TestQSPublicKey(t *testing.T) {
+	toolkitLinked := iqrcrypto.IqrToolkitLinked()
+	if toolkitLinked == false {
+		t.SkipNow()
+	}
+	priv, _ := iqrcrypto.GenerateDilithiumPrivateKey(iqrcrypto.IqrDILITHIUM128, rand.Reader)
+	pub := PublicKey(priv)
+	if pub == nil {
+		t.Fatal("should return public key")
+	}
+}
+
+func TestGetQSCertificateRequestPEMBlock(t *testing.T) {
+	toolkitLinked := iqrcrypto.IqrToolkitLinked()
+	if toolkitLinked == false {
+		t.SkipNow()
+	}
+	certRequest := getCertificateRequestForTest()
+	var priv crypto.Signer
+	priv, err := iqrcrypto.GenerateDilithiumPrivateKey(iqrcrypto.IqrDILITHIUM128, rand.Reader)
+	if err != nil {
+		t.Fatalf("Error generating Dilithium Private Key\nError: %s", err)
+	}
+	err = GenerateRequest(certRequest, priv)
+	if err != nil {
+		t.Fatalf("Error generating request\nError: %s", err)
+	}
+	csrPem := GetCertificateRequestPEMBlock(certRequest.GetCSR())
+	if csrPem == nil {
+		t.Fatalf("GetCertificateRequestPEMBlock returned nil pem block")
+	}
+}
+
+func getHybridCertificateRequest(t *testing.T) (csr []byte, priv crypto.Signer, qspriv *iqrcrypto.DilithiumPrivateKey) {
+	certRequest := getCertificateRequestForTest()
+	var privClassic crypto.Signer
+	privClassic, err := GenerateRSAPrivateKey(512)
+	if err != nil {
+		t.Fatalf("Error generating RSA Private Key\nError: %s", err)
+	}
+	err = GenerateRequest(certRequest, privClassic)
+	if err != nil {
+		t.Fatalf("Error generating request\nError: %s", err)
+	}
+
+	csrBlock, _ := pem.Decode(certRequest.GetCSR())
+	if csrBlock == nil {
+		log.Fatal("Error parsing classic CSR")
+	}
+	variant := iqrcrypto.IqrDILITHIUM128
+	privQS, err := iqrcrypto.GenerateDilithiumPrivateKey(variant, rand.Reader)
+	if err != nil {
+		t.Fatalf("Error generating Dilithium Private Key\nError: %s", err)
+	}
+
+	csrBytes, err := iqrcrypto.ExtendCertificateReqAlt(csrBlock.Bytes, privClassic, privQS)
+	if err != nil {
+		t.Fatalf("Error CreateHybridCertificateRequest\nError: %s", err)
+	}
+	return csrBytes, privClassic, privQS
+}
+
+func TestGetHybridCertificateRequestQSPEMBlock(t *testing.T) {
+	toolkitLinked := iqrcrypto.IqrToolkitLinked()
+	if toolkitLinked == false {
+		t.SkipNow()
+	}
+	csrBytes, _, privQS := getHybridCertificateRequest(t)
+	defer privQS.Destroy()
+	csrPem := GetCertificateRequestPEMBlock(csrBytes)
+	if csrPem == nil {
+		t.Fatalf("GetCertificateRequestPEMBlock returned nil pem block")
 	}
 }
 
