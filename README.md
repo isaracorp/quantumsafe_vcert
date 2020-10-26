@@ -7,7 +7,7 @@ _This open source project is community-supported. To report a problem or share a
 In addition, use the **[Pull requests](../../pulls)** tab to contribute actual bug fixes or proposed enhancements.
 We welcome and appreciate all contributions._
 
-# VCert
+# Quantum-Safe VCert
 
 [![GoDoc](https://godoc.org/github.com/Venafi/vcert?status.svg)](https://godoc.org/github.com/Venafi/vcert)  [![Go Report Card](https://goreportcard.com/badge/github.com/Venafi/vcert)](https://goreportcard.com/report/github.com/Venafi/vcert)
 [![Used By](https://sourcegraph.com/github.com/Venafi/vcert/-/badge.svg)](https://sourcegraph.com/github.com/Venafi/vcert?badge)
@@ -15,6 +15,18 @@ We welcome and appreciate all contributions._
 VCert is a Go library, SDK, and command line utility designed to simplify key generation and enrollment of machine identities
 (also known as SSL/TLS certificates and keys) that comply with enterprise security policy by using the
 [Venafi Platform](https://www.venafi.com/platform/trust-protection-platform) or [Venafi Cloud](https://pki.venafi.com/venafi-cloud/).
+
+This fork of VCert adds the ability to request quantum-safe certificates as well as use [ISARA Catalyst&trade; Agile Digital Certificate Technology](https://www.isara.com/products/isara-catalyst-agile-digital-certificate-technology.html).
+
+To make use of the quantum-safe features, the [ISARA Radiate &trade; Quantum-Resistant Library 2.0](https://www.isara.com/toolkit/2/doc/guide/guide.html) is needed.  Contact quantumsafe@isara.com for more information.
+
+#### Quantum-Safe Features
+
+The following quantum-safe features are added to the command line `vcert` tool in this fork:
+
+- Add `extendcsrqs` command to convert a conventional CSR to a dual-signature one.
+- Add `-key-param` parameter for `gencsr` and `extendcsrqs` to specify the key's parameters Options include `iqr_dilithium_128` and `iqr_dilithium_160` (default `iqr_dilithium_128`).
+- New `-key-type` value of `dilithium`.
 
 #### Compatibility
 
@@ -29,15 +41,33 @@ Custom Fields and Instance Tracking require TPP 18.2 or higher, and Token Authen
 3. Download the source code:
 
 ```sh
-go get github.com/Venafi/vcert
+go get github.com/isaracorp/quantumsafe_vcert
 ```
 
 or
 
 ```sh
-git clone https://github.com/Venafi/vcert.git $GOPATH/src/github.com/Venafi/vcert
+git clone https://github.com/isaracorp/quantumsafe_vcert.git $GOPATH/src/github.com/isaracorp/quantumsafe_vcert
 ```
-4. Build the command line utilities for Linux, MacOS, and Windows:
+4. Set a platform-specific environment variable pointing to the ISARA toolkit location:
+
+```sh
+export IQR_TOOLKIT_PATH_LINUX_X64=/path/to/iqr_toolkit-2.0-linux
+```
+
+or
+
+```sh
+export IQR_TOOLKIT_PATH_DARWIN_X64=/path/to/iqr_toolkit-2.0-macos
+```
+
+or
+
+```sh
+export IQR_TOOLKIT_PATH_WIN_X64=/path/to/iqr_toolkit-2.0-windows
+```
+
+5. Build the command line utilities for Linux, MacOS, and Windows:
 
 ```sh
 make build
@@ -150,3 +180,12 @@ Copyright &copy; Venafi, Inc. All rights reserved.
 VCert is licensed under the Apache License, Version 2.0. See `LICENSE` for the full license text.
 
 Please direct questions/comments to opensource@venafi.com.
+
+### Trademarks
+
+ISARA Radiate&trade; and ISARA Catalyst&trade; are trademarks of ISARA Corporation.
+
+### Patent Information
+
+Portions of this software are covered by US Patent
+[10,425,401](http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO1&Sect2=HITOFF&d=PALL&p=1&u=%2Fnetahtml%2FPTO%2Fsrchnum.htm&r=1&f=G&l=50&s1=10,425,401.PN.&OS=PN/10,425,401&RS=PN/10,425,401[10,425,401])

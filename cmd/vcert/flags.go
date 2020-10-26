@@ -105,7 +105,7 @@ var (
 
 	flagKeyParam = &cli.StringFlag{
 		Name:        "key-param",
-		Usage:       "Use to specify a key parameter for Dilithium algorithm (default iqr_dilithium_128). Options include: iqr_dilithium_128 | iqr_dilithium_160 (Default: iqr_dilithium_128)",
+		Usage:       "Use to specify a key parameter for Dilithium algorithm. Options include: iqr_dilithium_128 | iqr_dilithium_160",
 		Destination: &flags.keyParamString,
 		DefaultText: "iqr_dilithium_128",
 	}
