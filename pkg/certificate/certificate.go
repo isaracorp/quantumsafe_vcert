@@ -453,7 +453,7 @@ func GetPrivateKeyPEMBock(key crypto.Signer) (*pem.Block, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &pem.Block{Type: "ALT PRIVATE KEY", Bytes: keyBuf}, nil
+		return &pem.Block{Type: "PRIVATE KEY", Bytes: keyBuf}, nil
 	default:
 		return nil, fmt.Errorf("%w: unable to format Key", verror.VcertError)
 	}
@@ -470,6 +470,12 @@ func GetEncryptedPrivateKeyPEMBock(key crypto.Signer, password []byte) (*pem.Blo
 			return nil, err
 		}
 		return x509.EncryptPEMBlock(rand.Reader, "EC PRIVATE KEY", b, password, x509.PEMCipherAES256)
+	case *iqrcrypto.DilithiumPrivateKey:
+		derKey, err := iqrcrypto.IqrDilithiumExportPrivateKeyPKCS8(key.(*iqrcrypto.DilithiumPrivateKey))
+		if err != nil {
+			return nil, err
+		}
+		return x509.EncryptPEMBlock(rand.Reader, "PRIVATE KEY", derKey, password, x509.PEMCipherAES256)
 	default:
 		return nil, fmt.Errorf("%w: unable to format Key", verror.VcertError)
 	}
