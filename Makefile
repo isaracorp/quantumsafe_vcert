@@ -63,6 +63,15 @@ CGO_ENABLED_DARWIN_X64=0
 CGO_ENABLED_WIN_X64=0
 endif
 
+export CGO_LDFLAGS_TEST=$(LD_WIN_X64)
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	export CGO_LDFLAGS_TEST=$(LD_LINUX_X64)
+endif
+ifeq ($(UNAME_S),Darwin)
+	export CGO_LDFLAGS_TEST=$(LD_DARWIN_X64)
+endif
+
 GO_LDFLAGS=-ldflags "-X github.com/Venafi/vcert.versionString=$(VERSION) -X github.com/Venafi/vcert.versionBuildTimeStamp=`date -u +%Y%m%d.%H%M%S` -s -w"
 version:
 	echo "$(VERSION)"
@@ -102,17 +111,17 @@ gofmt:
 	! gofmt -l . | grep -v ^vendor/ | grep .
 
 test: get linter
-	go test -v -cover .
-	go test -v -cover ./pkg/certificate
-	go test -v -cover ./pkg/endpoint
-	go test -v -cover ./pkg/venafi/fake
-	go test -v -cover ./cmd/vcert
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v -cover .
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v -cover ./pkg/certificate
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v -cover ./pkg/endpoint
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v -cover ./pkg/venafi/fake
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v -cover ./cmd/vcert
 
 tpp_test: get
-	go test -v $(GOFLAGS) ./pkg/venafi/tpp
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v $(GOFLAGS) ./pkg/venafi/tpp
 
 cloud_test: get
-	go test -v $(GOFLAGS) ./pkg/venafi/cloud
+	env CGO_LDFLAGS=$(CGO_LDFLAGS_TEST) go test -v $(GOFLAGS) ./pkg/venafi/cloud
 
 collect_artifacts:
 	rm -rf artifcats
