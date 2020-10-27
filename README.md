@@ -24,7 +24,7 @@ To make use of the quantum-safe features, the [ISARA Radiate &trade; Quantum-Res
 
 The following quantum-safe features are added to the command line `vcert` tool in this fork:
 
-- Add `extendcsrqs` command to convert a conventional CSR to a dual-signature one.
+- Add `extendcsrqs` command to convert a conventional CSR to an ISARA Catalyst dual-signature CSR.
 - Add `-key-param` parameter for `gencsr` and `extendcsrqs` to specify the key's parameters Options include `iqr_dilithium_128` and `iqr_dilithium_160` (default `iqr_dilithium_128`).
 - New `-key-type` value of `dilithium`.
 
